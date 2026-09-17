@@ -56,7 +56,8 @@
           </div>
         </div>
 
-        <!-- Payment Info (show after order created - inside same column, NOT when modal is open) -->
+        <!-- Payment Info (show after order created) -->
+        <!-- Payment Info Section -->
         <div v-if="paymentInfo && !showPaymentModal" class="payment-info card" style="margin-top: 20px;">
           <div class="card-header">
             Thông tin chuyển khoản
@@ -70,43 +71,44 @@
             </div>
           </div>
           <div class="card-body">
-            <div class="qr-section">
-              <img :src="paymentInfo.qr_url" alt="QR Code" class="qr-code" />
-              <p class="qr-note">Quét mã QR để chuyển khoản nhanh</p>
-            </div>
+            <div class="payment-details-grid">
+              <div class="qr-section">
+                <img :src="qrUrl" alt="QR Code" class="qr-code" />
+                <p class="qr-note">Quét mã QR để chuyển khoản nhanh</p>
+              </div>
 
-            <div class="info-row">
-              <span>Ngân hàng:</span>
-              <strong>{{ paymentInfo.bank_name }}</strong>
-            </div>
-            <div class="info-row">
-              <span>Số tài khoản:</span>
-              <strong>{{ paymentInfo.account_number }}</strong>
-              <button class="btn-copy" @click="copy(paymentInfo.account_number)">📋</button>
-            </div>
-            <div class="info-row">
-              <span>Chủ tài khoản:</span>
-              <strong>{{ paymentInfo.account_name }}</strong>
-            </div>
-            <div class="info-row highlight">
-              <span>Mã đơn:</span>
-              <strong>{{ paymentInfo.order_code }}</strong>
-            </div>
-            <div class="info-row highlight">
-              <span>Số tiền:</span>
-              <strong class="text-success">{{ formatPrice(paymentInfo.amount) }}</strong>
-            </div>
-            <div class="info-row highlight">
-              <span>Nội dung CK:</span>
-              <strong>{{ paymentInfo.content }}</strong>
-              <button class="btn-copy" @click="copy(paymentInfo.content)">📋</button>
+              <div class="info-section">
+                <div class="info-row">
+                  <span>Ngân hàng:</span>
+                  <strong>{{ paymentInfo.bank_name || (paymentInfo.bank && paymentInfo.bank.bankName) }}</strong>
+                </div>
+                <div class="info-row">
+                  <span>Số tài khoản:</span>
+                  <strong>{{ paymentInfo.account_number || (paymentInfo.bank && paymentInfo.bank.accountNumber) }}</strong>
+                  <button class="btn-copy" @click="copy(paymentInfo.account_number || (paymentInfo.bank && paymentInfo.bank.accountNumber))">📋</button>
+                </div>
+                <div class="info-row">
+                  <span>Chủ tài khoản:</span>
+                  <strong>{{ paymentInfo.account_name || (paymentInfo.bank && paymentInfo.bank.accountName) }}</strong>
+                </div>
+                <div class="info-row highlight">
+                  <span>Nội dung chuyển khoản:</span>
+                  <strong>{{ paymentInfo.reference || paymentInfo.content }}</strong>
+                  <button class="btn-copy" @click="copy(paymentInfo.reference || paymentInfo.content)">📋</button>
+                </div>
+                <div class="info-row highlight">
+                  <span>Số tiền:</span>
+                  <strong class="text-success">{{ formatPrice(paymentInfo.amount) }}</strong>
+                  <button class="btn-copy" @click="copy(paymentInfo.amount)">📋</button>
+                </div>
+              </div>
             </div>
 
             <div class="important-note">
               <strong>⚠️ Quan trọng:</strong>
               <ul>
                 <li>Chuyển đúng số tiền: <strong>{{ formatPrice(paymentInfo.amount) }}</strong></li>
-                <li>Nội dung <strong>BẮT BUỘC</strong>: <strong>{{ paymentInfo.content }}</strong></li>
+                <li>Nội dung <strong>BẮT BUỘC</strong>: <strong>{{ paymentInfo.reference || paymentInfo.content }}</strong></li>
                 <li>Tiền sẽ được cộng <strong>tự động</strong> sau 1-5 phút</li>
               </ul>
             </div>
@@ -138,38 +140,39 @@
               <div class="modal-body">
                 <div class="modal-grid">
                   <div class="qr-section">
-                    <img :src="paymentInfo.qr_url" alt="QR Code" class="qr-code" />
-                    <p class="qr-note">Quét mã QR để chuyển khoản</p>
+                    <img :src="qrUrl" alt="QR Code" class="qr-code" />
+                    <p class="qr-note">Quét mã QR</p>
                   </div>
 
                   <div class="info-section">
                     <div class="info-row">
                       <span>Ngân hàng:</span>
-                      <strong>{{ paymentInfo.bank_name }}</strong>
+                      <strong>{{ paymentInfo.bank_name || (paymentInfo.bank && paymentInfo.bank.bankName) }}</strong>
                     </div>
                     <div class="info-row">
                       <span>STK:</span>
-                      <strong>{{ paymentInfo.account_number }}</strong>
-                      <button class="btn-copy" @click="copy(paymentInfo.account_number)">📋</button>
+                      <strong>{{ paymentInfo.account_number || (paymentInfo.bank && paymentInfo.bank.accountNumber) }}</strong>
+                      <button class="btn-copy" @click="copy(paymentInfo.account_number || (paymentInfo.bank && paymentInfo.bank.accountNumber))">📋</button>
                     </div>
                     <div class="info-row">
                       <span>Chủ TK:</span>
-                      <strong>{{ paymentInfo.account_name }}</strong>
+                      <strong>{{ paymentInfo.account_name || (paymentInfo.bank && paymentInfo.bank.accountName) }}</strong>
                     </div>
                     <div class="info-row highlight">
                       <span>Số tiền:</span>
                       <strong class="text-success">{{ formatPrice(paymentInfo.amount) }}</strong>
+                      <button class="btn-copy" @click="copy(paymentInfo.amount)">📋</button>
                     </div>
                     <div class="info-row highlight">
                       <span>Nội dung:</span>
-                      <strong>{{ paymentInfo.content }}</strong>
-                      <button class="btn-copy" @click="copy(paymentInfo.content)">📋</button>
+                      <strong>{{ paymentInfo.reference || paymentInfo.content }}</strong>
+                      <button class="btn-copy" @click="copy(paymentInfo.reference || paymentInfo.content)">📋</button>
                     </div>
                   </div>
                 </div>
 
                 <div class="important-note compact">
-                  ⚠️ Chuyển <strong>{{ formatPrice(paymentInfo.amount) }}</strong> với nội dung <strong>{{ paymentInfo.content }}</strong>. Tiền cộng tự động sau 1-5 phút.
+                  ⚠️ Chuyển <strong>{{ formatPrice(paymentInfo.amount) }}</strong> với nội dung <strong>{{ paymentInfo.content }}</strong>.
                 </div>
 
                 <div class="polling-status" v-if="pollInterval">
@@ -248,6 +251,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
+import { useToast } from '../composables/useToast'
+
+const { toast } = useToast()
 
 const authStore = useAuthStore()
 
@@ -261,6 +267,8 @@ const lastDepositAmount = ref(0)
 const currentPage = ref(1)
 const perPage = 10
 const showPaymentModal = ref(false)
+const activeBanks = ref([])
+const selectedBank = ref(null)
 let pollInterval = null
 
 const quickAmounts = [50000, 100000, 200000, 500000, 1000000]
@@ -307,7 +315,7 @@ const statusText = (status) => {
 const copy = (text) => {
   if (text) {
     navigator.clipboard.writeText(text)
-    alert('Đã copy!')
+    toast.success('Đã copy!')
   }
 }
 
@@ -318,31 +326,50 @@ const selectPendingDeposit = async (tx) => {
   stopPolling()
   
   try {
-    // Get bank info for QR code
-    const bankResponse = await api.get('/deposit/bank-info')
-    const bankInfo = bankResponse.data
-    
     // Construct payment info from deposit record
+    // Use assigned bank from transaction history
     paymentInfo.value = {
-      bank_name: bankInfo.sepay_bank_name,
-      account_number: bankInfo.sepay_bank_account,
-      account_name: bankInfo.sepay_account_name,
-      amount: tx.amount,
-      order_code: tx.id,
+      ...tx,
       content: tx.reference,
-      qr_url: `https://img.vietqr.io/image/${bankInfo.sepay_bank_name}-${bankInfo.sepay_bank_account}-compact2.png?amount=${tx.amount}&addInfo=${tx.reference}&accountName=${encodeURIComponent(bankInfo.sepay_account_name)}`,
     }
-    
+
     // Show modal
     showPaymentModal.value = true
     
     // Start polling for this deposit
     pollInterval = setInterval(checkStatus, 5000)
   } catch (error) {
-    console.error('Failed to load payment info:', error)
-    alert('Không thể tải thông tin thanh toán')
+    console.error('Failed to load banks:', error)
+    toast.error('Không thể tải thông tin ngân hàng')
   }
 }
+
+const fetchBanks = async () => {
+  try {
+    const response = await api.get('/deposit/banks')
+    activeBanks.value = response.data
+    if (activeBanks.value.length > 0 && !selectedBank.value) {
+      selectedBank.value = activeBanks.value[0]
+    }
+  } catch (error) {
+    console.error('Failed to fetch banks:', error)
+  }
+}
+
+const selectBank = (bank) => {
+  selectedBank.value = bank
+}
+
+const qrUrl = computed(() => {
+  if (!paymentInfo.value) return ''
+  if (paymentInfo.value.qr_url) return paymentInfo.value.qr_url
+
+  const bank = paymentInfo.value.bank
+  if (bank) {
+    return `https://img.vietqr.io/image/${bank.bankName}-${bank.accountNumber}-compact2.png?amount=${paymentInfo.value.amount}&addInfo=${paymentInfo.value.content}&accountName=${encodeURIComponent(bank.accountName)}`
+  }
+  return ''
+})
 
 const closePaymentModal = () => {
   showPaymentModal.value = false
@@ -393,7 +420,10 @@ const createOrder = async () => {
   creating.value = true
   try {
     const response = await api.post('/deposit/create', { amount: amount.value })
-    paymentInfo.value = response.data.payment_info
+    paymentInfo.value = {
+      ...response.data,
+      content: response.data.reference
+    }
     showPaymentModal.value = true
     loadTransactions()
     
@@ -401,7 +431,7 @@ const createOrder = async () => {
     stopPolling()
     pollInterval = setInterval(checkStatus, 5000)
   } catch (error) {
-    alert(error.response?.data?.message || 'Lỗi khi tạo đơn')
+    toast.error(error.response?.data?.message || 'Lỗi khi tạo đơn')
   } finally {
     creating.value = false
   }
@@ -430,6 +460,7 @@ onMounted(() => {
   // Refresh user profile to get latest balance
   authStore.fetchProfile()
   loadTransactions()
+  fetchBanks()
 })
 
 onUnmounted(() => {
@@ -790,9 +821,51 @@ onUnmounted(() => {
   height: auto;
 }
 
-.info-section {
-  flex: 1;
-  min-width: 0;
+.payment-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.bank-selector {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.bank-tab {
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.bank-tab:hover {
+  border-color: var(--primary);
+}
+
+.bank-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.bank-tab-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 600px) {
+  .payment-details-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .info-section .info-row {

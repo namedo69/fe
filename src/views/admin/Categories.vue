@@ -1,7 +1,10 @@
 <template>
   <div class="admin-categories">
     <div class="page-header flex-between">
-      <h1 class="page-title">📁 Quản lý danh mục</h1>
+      <h1 class="page-title">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg>
+        Quản lý danh mục
+      </h1>
       <button class="btn btn-primary" @click="openModal()">+ Thêm danh mục</button>
     </div>
 
@@ -21,11 +24,11 @@
         </thead>
         <tbody>
           <tr v-for="cat in categories" :key="cat.id">
-            <td>{{ cat.id }}</td>
-            <td>{{ cat.name }}</td>
-            <td class="text-muted">{{ cat.description || '-' }}</td>
-            <td>{{ cat.products_count }}</td>
-            <td>
+            <td data-label="ID">{{ cat.id }}</td>
+            <td data-label="Tên">{{ cat.name }}</td>
+            <td data-label="Mô tả" class="text-muted-desc">{{ cat.description || '-' }}</td>
+            <td data-label="Sản phẩm">{{ cat.products_count }}</td>
+            <td data-label="Trạng thái">
               <span :class="['badge', cat.active ? 'badge-success' : 'badge-danger']">
                 {{ cat.active ? 'Hoạt động' : 'Ẩn' }}
               </span>
@@ -37,6 +40,13 @@
           </tr>
         </tbody>
       </table>
+      
+      <Pagination 
+        v-model:page="page" 
+        v-model:limit="limit" 
+        :total="total" 
+        :totalPages="totalPages" 
+      />
     </div>
 
     <!-- Modal -->
@@ -85,14 +95,25 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { adminApi } from '../../api'
+import { useToast } from '../../composables/useToast'
+import { isDirectLink, convertDriveLink } from '../../utils/image'
+import Pagination from '../../components/Pagination.vue'
+
+const { toast, confirm } = useToast()
 
 const loading = ref(true)
 const saving = ref(false)
 const showModal = ref(false)
 const editing = ref(null)
 const categories = ref([])
+
+// Pagination
+const page = ref(1)
+const limit = ref(10)
+const total = ref(0)
+const totalPages = ref(0)
 
 
 const form = reactive({
@@ -102,25 +123,41 @@ const form = reactive({
   active: true,
 })
 
+// Tự động chuyển đổi link Google Drive
+watch(() => form.image, (newVal) => {
+  if (newVal) {
+    const converted = convertDriveLink(newVal)
+    if (converted !== newVal) {
+      form.image = converted
+    }
+  }
+})
+
 const loadCategories = async () => {
   loading.value = true
   try {
-    const response = await adminApi.getCategories({ per_page: 100 })
+    const response = await adminApi.getCategories({ 
+      page: page.value, 
+      limit: limit.value 
+    })
     categories.value = response.data.data
+    total.value = response.data.pagination.total
+    totalPages.value = response.data.pagination.totalPages
   } catch (error) {
     console.error('Failed to load categories:', error)
+    toast.error('Lỗi khi tải danh mục')
   } finally {
     loading.value = false
   }
 }
 
+// Watch for pagination changes
+watch([page, limit], loadCategories)
+
 const handleImageError = (e) => {
   e.target.src = 'https://via.placeholder.com/200x150?text=Invalid+URL'
 }
 
-const isDirectLink = (url) => {
-  return /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(url.split('?')[0])
-}
 
 const openModal = (cat = null) => {
   editing.value = cat
@@ -144,7 +181,10 @@ const closeModal = () => {
 }
 
 const saveCategory = async () => {
-  if (!form.name) return
+  if (!form.name) {
+    toast.error('Vui lòng nhập tên danh mục')
+    return
+  }
   
   saving.value = true
   try {
@@ -164,28 +204,31 @@ const saveCategory = async () => {
         categories.value[index].image = form.image
         categories.value[index].active = form.active
       }
+      toast.success('Cập nhật danh mục thành công!')
     } else {
       await adminApi.createCategory(data)
       await loadCategories()
+      toast.success('Thêm danh mục thành công!')
     }
     
     closeModal()
   } catch (error) {
-    alert(error.response?.data?.message || 'Lưu thất bại')
+    toast.error(error.response?.data?.message || 'Lưu thất bại')
   } finally {
     saving.value = false
   }
 }
 
 const deleteCategory = async (cat) => {
-  if (!confirm(`Xóa danh mục "${cat.name}"?`)) return
+  const confirmed = await confirm(`Xóa danh mục "${cat.name}"?`, { type: 'danger', title: 'Xóa danh mục' })
+  if (!confirmed) return
   
   try {
     await adminApi.deleteCategory(cat.id)
     // Optimized: Update local state
     categories.value = categories.value.filter(c => c.id !== cat.id)
   } catch (error) {
-    alert(error.response?.data?.message || 'Xóa thất bại')
+    toast.error(error.response?.data?.message || 'Xóa thất bại')
   }
 }
 
@@ -193,6 +236,12 @@ onMounted(loadCategories)
 </script>
 
 <style scoped>
+.admin-categories {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .image-preview {
   margin-top: 0.75rem;
 }
@@ -202,6 +251,71 @@ onMounted(loadCategories)
   max-height: 150px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+}
+
+.text-muted-desc {
+  color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .page-header .btn {
+    width: 100%;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tbody tr {
+    display: block;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: right;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .table td:last-child {
+    border-bottom: none;
+    justify-content: center;
+    gap: 0.5rem;
+    padding-top: 1rem !important;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  .text-muted-desc {
+    word-break: break-word;
+  }
+
+  .modal {
+    width: 95% !important;
+    max-width: 100% !important;
+    margin: 0 auto;
+  }
 }
 </style>
 

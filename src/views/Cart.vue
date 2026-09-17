@@ -23,14 +23,23 @@
             <div class="cart-item-info">
               <h3>{{ item.name }}</h3>
               <p class="cart-item-price">{{ formatPrice(item.sale_price || item.price) }}</p>
+              <small v-if="item.minimum_order_quantity">Mua tối thiểu {{ item.minimum_order_quantity }} sản phẩm</small>
             </div>
             <div class="cart-item-quantity">
               <button @click="updateQuantity(item.id, item.quantity - 1, item.stock)">-</button>
-              <span>{{ item.quantity }}</span>
+              <input 
+                type="number"
+                :value="item.quantity"
+                @input="onQuantityInput(item, $event)"
+                @blur="onQuantityBlur(item, $event)"
+                :min="minimumQuantity(item)"
+                :max="isUnlimited(item) ? 9999 : item.stock"
+                class="quantity-input"
+              />
               <button 
                 @click="updateQuantity(item.id, item.quantity + 1, item.stock)"
-                :disabled="item.quantity >= item.stock"
-                :title="item.quantity >= item.stock ? 'Đã đạt giới hạn kho' : ''"
+                :disabled="!isUnlimited(item) && item.quantity >= item.stock"
+                :title="!isUnlimited(item) && item.quantity >= item.stock ? 'Đã đạt giới hạn kho' : ''"
               >+</button>
             </div>
             <div class="cart-item-total">
@@ -65,8 +74,14 @@
 <script setup>
 import { useCartStore } from '../stores/cart'
 import { getImageUrl } from '../utils/image'
+import { useToast } from '../composables/useToast'
+
+const { confirm } = useToast()
 
 const cartStore = useCartStore()
+
+const minimumQuantity = (item) => Math.max(1, Number(item.minimum_order_quantity) || 1)
+const isUnlimited = (item) => item.is_preorder || item.is_checkpass
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat('vi-VN', {
@@ -83,12 +98,42 @@ const updateQuantity = (productId, quantity, stock) => {
   }
 }
 
+const onQuantityInput = (item, event) => {
+  const val = event.target.value
+  if (val === '') return
+  let num = parseInt(val, 10)
+  if (isNaN(num) || num < minimumQuantity(item)) {
+    num = minimumQuantity(item)
+  }
+  const maxStock = isUnlimited(item) ? 9999 : (item.stock || 9999)
+  if (num > maxStock) {
+    num = maxStock
+    event.target.value = maxStock
+  }
+  cartStore.updateQuantity(item.id, num, item.stock)
+}
+
+const onQuantityBlur = (item, event) => {
+  const val = event.target.value
+  let num = parseInt(val, 10)
+  if (isNaN(num) || num < minimumQuantity(item)) {
+    num = minimumQuantity(item)
+  }
+  const maxStock = isUnlimited(item) ? 9999 : (item.stock || 9999)
+  if (num > maxStock) {
+    num = maxStock
+  }
+  event.target.value = num
+  cartStore.updateQuantity(item.id, num, item.stock)
+}
+
 const removeItem = (productId) => {
   cartStore.removeItem(productId)
 }
 
-const clearCart = () => {
-  if (confirm('Bạn có chắc muốn xóa giỏ hàng?')) {
+const clearCart = async () => {
+  const confirmed = await confirm('Bạn có chắc muốn xóa giỏ hàng?', { type: 'warning' })
+  if (confirmed) {
     cartStore.clearCart()
   }
 }
@@ -171,9 +216,24 @@ const clearCart = () => {
   background: var(--bg-secondary);
 }
 
-.cart-item-quantity span {
-  min-width: 30px;
+.cart-item-quantity input {
+  width: 50px;
+  height: 30px;
+  border: none;
+  background: none;
   text-align: center;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.cart-item-quantity input::-webkit-outer-spin-button,
+.cart-item-quantity input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cart-item-quantity input[type=number] {
+  -moz-appearance: textfield;
 }
 
 .cart-item-total {

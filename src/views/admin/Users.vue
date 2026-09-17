@@ -6,13 +6,12 @@
     </div>
 
     <div class="card">
-      <div class="card-header">
+      <div class="card-header search-container">
         <input 
           v-model="search" 
           type="text" 
           class="form-input" 
-          placeholder="Tìm kiếm theo tên hoặc email..."
-          style="max-width: 300px"
+          placeholder="Tìm kiếm..."
         />
       </div>
       <div class="card-body">
@@ -32,17 +31,18 @@
           </thead>
           <tbody>
             <tr v-for="user in filteredUsers" :key="user.id">
-              <td><strong>{{ user.id }}</strong></td>
-              <td>{{ user.name }}</td>
-              <td>{{ user.email }}</td>
-              <td>
+              <td data-label="ID"><strong>{{ user.id }}</strong></td>
+              <td data-label="Tên">{{ user.name }}</td>
+              <td data-label="Email">{{ user.email }}</td>
+              <td data-label="Role">
                 <span :class="['badge', user.role === 'admin' ? 'badge-danger' : 'badge-secondary']">
                   {{ user.role }}
                 </span>
               </td>
-              <td class="text-success">{{ formatPrice(user.balance) }}</td>
-              <td>{{ formatDate(user.createdAt) }}</td>
+              <td data-label="Số dư" class="text-success-val">{{ formatPrice(user.balance) }}</td>
+              <td data-label="Ngày tạo">{{ formatDate(user.createdAt) }}</td>
               <td>
+                <button class="btn btn-sm btn-secondary" title="Biến động số dư" @click="viewHistory(user)">⏳</button>
                 <button class="btn btn-sm btn-secondary" @click="editUser(user)">✏️</button>
                 <button 
                   class="btn btn-sm btn-danger" 
@@ -53,7 +53,14 @@
             </tr>
           </tbody>
         </table>
-      </div>
+      
+      <Pagination 
+        v-model:page="page" 
+        v-model:limit="limit" 
+        :total="total" 
+        :totalPages="totalPages" 
+      />
+    </div>
     </div>
 
     <!-- Edit Modal -->
@@ -71,7 +78,7 @@
             </div>
             <div class="form-group">
               <label>Email</label>
-              <input v-model="editForm.email" type="email" class="form-input" />
+              <input v-model="editForm.email" type="text" class="form-input" />
             </div>
             <div class="form-group">
               <label>Role</label>
@@ -81,15 +88,69 @@
               </select>
             </div>
             <div class="form-group">
-              <label>Số dư</label>
-              <input v-model.number="editForm.balance" type="number" class="form-input" />
+              <label>Cộng số dư (nhập số dương để cộng, âm để trừ)</label>
+              <input v-model.number="editForm.addBalance" type="number" class="form-input" placeholder="0" />
+            </div>
+            <div class="form-group">
+              <label>Đặt lại mật khẩu</label>
+              <input v-model="newPassword" type="password" class="form-input" minlength="6" placeholder="Ít nhất 6 ký tự" />
+              <small class="form-hint">Chỉ nhập khi cần đổi mật khẩu cho người dùng này.</small>
             </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" @click="closeModal">Hủy</button>
+            <button class="btn btn-warning" @click="resetPassword" :disabled="resettingPassword || newPassword.length < 6">
+              {{ resettingPassword ? 'Đang đặt lại...' : 'Đặt lại mật khẩu' }}
+            </button>
             <button class="btn btn-primary" @click="saveUser" :disabled="saving">
               {{ saving ? 'Đang lưu...' : 'Lưu' }}
             </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- History Modal -->
+    <Transition name="modal">
+      <div v-if="showHistory" class="modal-overlay" @click.self="closeHistory">
+        <div class="modal modal-lg">
+          <div class="modal-header">
+            <h3>Lịch sử giao dịch #{{ historyUser.id }} - {{ historyUser.name }}</h3>
+            <button class="btn-close" @click="closeHistory">×</button>
+          </div>
+          <div class="modal-body history-body">
+            <div v-if="loadingHistory" class="loading"><div class="spinner"></div></div>
+            <table v-else class="table">
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Loại</th>
+                  <th>Số tiền</th>
+                  <th>Trước</th>
+                  <th>Sau</th>
+                  <th>Nội dung</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="tx in userTransactions" :key="tx.id">
+                  <td class="text-nowrap">{{ formatDateFull(tx.createdAt) }}</td>
+                  <td>
+                    <span :class="['badge', getTxBadgeClass(tx.type)]">
+                      {{ getTxLabel(tx.type) }}
+                    </span>
+                  </td>
+                  <td :class="tx.amount > 0 ? 'text-success' : 'text-danger'">
+                    {{ tx.amount > 0 ? '+' : '' }}{{ formatPrice(tx.amount) }}
+                  </td>
+                  <td class="text-secondary">{{ formatPrice(tx.balanceBefore) }}</td>
+                  <td class="text-secondary">{{ formatPrice(tx.balanceAfter) }}</td>
+                  <td><small>{{ tx.description }}</small></td>
+                </tr>
+                <tr v-if="userTransactions.length === 0">
+                  <td colspan="6" class="text-center py-4">Không có giao dịch nào</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -98,23 +159,37 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import api from '../../api'
+import { useToast } from '../../composables/useToast'
+import Pagination from '../../components/Pagination.vue'
+
+const { toast, confirm } = useToast()
 
 const users = ref([])
 const loading = ref(true)
 const search = ref('')
 const showModal = ref(false)
+const saving = ref(false)
 const editingUser = ref(null)
 const editForm = ref({})
-const saving = ref(false)
+const newPassword = ref('')
+const resettingPassword = ref(false)
+
+// Pagination
+const page = ref(1)
+const limit = ref(10)
+const total = ref(0)
+const totalPages = ref(0)
+
+// History Modal
+const showHistory = ref(false)
+const historyUser = ref(null)
+const userTransactions = ref([])
+const loadingHistory = ref(false)
 
 const filteredUsers = computed(() => {
-  if (!search.value) return users.value
-  const s = search.value.toLowerCase()
-  return users.value.filter(u => 
-    u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s)
-  )
+  return users.value
 })
 
 const formatPrice = (price) => {
@@ -129,21 +204,65 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('vi-VN')
 }
 
+const formatDateFull = (date) => {
+  if (!date) return '-'
+  return new Date(date).toLocaleString('vi-VN')
+}
+
+const getTxBadgeClass = (type) => {
+  switch (type) {
+    case 'deposit': return 'badge-success'
+    case 'purchase': return 'badge-danger'
+    case 'refund': return 'badge-warning'
+    default: return 'badge-secondary'
+  }
+}
+
+const getTxLabel = (type) => {
+  switch (type) {
+    case 'deposit': return 'Nạp tiền'
+    case 'purchase': return 'Mua hàng'
+    case 'refund': return 'Hoàn tiền'
+    default: return type
+  }
+}
+
 const loadUsers = async () => {
   loading.value = true
   try {
-    const response = await api.get('/admin/users')
+    const params = {
+      page: page.value,
+      limit: limit.value,
+      q: search.value || undefined
+    }
+    const response = await api.get('/admin/users', { params })
     users.value = response.data.data
+    total.value = response.data.pagination.total
+    totalPages.value = response.data.pagination.totalPages
   } catch (error) {
     console.error('Failed to load users:', error)
+    toast.error('Lỗi khi tải người dùng')
   } finally {
     loading.value = false
   }
 }
 
+// Watch for changes
+watch([page, limit], loadUsers)
+watch(search, () => {
+  page.value = 1
+  loadUsers()
+})
+
 const editUser = (user) => {
   editingUser.value = user
-  editForm.value = { ...user }
+  editForm.value = { 
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    addBalance: 0  // Default to 0 for adding balance
+  }
+  newPassword.value = ''
   showModal.value = true
 }
 
@@ -151,6 +270,22 @@ const closeModal = () => {
   showModal.value = false
   editingUser.value = null
   editForm.value = {}
+  newPassword.value = ''
+}
+
+const resetPassword = async () => {
+  if (!editingUser.value || newPassword.value.length < 6) return
+
+  resettingPassword.value = true
+  try {
+    await api.put(`/admin/users/${editingUser.value.id}/password`, { password: newPassword.value })
+    newPassword.value = ''
+    toast.success('Đã đặt lại mật khẩu thành công')
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Không thể đặt lại mật khẩu')
+  } finally {
+    resettingPassword.value = false
+  }
 }
 
 const saveUser = async () => {
@@ -158,23 +293,45 @@ const saveUser = async () => {
   try {
     await api.put(`/admin/users/${editingUser.value.id}`, editForm.value)
     await loadUsers()
+    toast.success('Cập nhật người dùng thành công!')
     closeModal()
   } catch (error) {
-    alert(error.response?.data?.message || 'Lỗi khi lưu')
+    toast.error(error.response?.data?.message || 'Lỗi khi lưu')
   } finally {
     saving.value = false
   }
 }
 
 const deleteUser = async (user) => {
-  if (!confirm(`Xóa người dùng "${user.name}"?`)) return
+  const confirmed = await confirm(`Xóa người dùng "${user.name}"?`, { type: 'danger', title: 'Xóa người dùng' })
+  if (!confirmed) return
   
   try {
     await api.delete(`/admin/users/${user.id}`)
     await loadUsers()
   } catch (error) {
-    alert(error.response?.data?.message || 'Lỗi khi xóa')
+    toast.error(error.response?.data?.message || 'Lỗi khi xóa')
   }
+}
+
+const viewHistory = async (user) => {
+  historyUser.value = user
+  showHistory.value = true
+  loadingHistory.value = true
+  try {
+    const response = await api.get(`/admin/users/${user.id}/transactions`)
+    userTransactions.value = response.data.data
+  } catch (error) {
+    toast.error('Không thể tải lịch sử giao dịch')
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+const closeHistory = () => {
+  showHistory.value = false
+  historyUser.value = null
+  userTransactions.value = []
 }
 
 onMounted(loadUsers)
@@ -182,7 +339,9 @@ onMounted(loadUsers)
 
 <style scoped>
 .admin-users {
-  padding: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .page-header {
@@ -190,6 +349,7 @@ onMounted(loadUsers)
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .page-header h1 {
@@ -230,6 +390,19 @@ onMounted(loadUsers)
   width: 100%;
   max-width: 450px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.modal-lg {
+  max-width: 900px;
+}
+
+.history-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.text-nowrap {
+  white-space: nowrap;
 }
 
 .modal-header {
@@ -274,12 +447,81 @@ onMounted(loadUsers)
   font-weight: 500;
 }
 
-.text-success {
+.text-success-val {
   color: var(--success);
 }
 
-.btn-sm {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.85rem;
+.search-container {
+  padding: 1rem;
+}
+
+@media (max-width: 480px) {
+  .search-container .form-input {
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-users {
+    padding: 0.75rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* Table to Cards */
+  .table thead {
+    display: none;
+  }
+
+  .table tbody tr {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: var(--bg-secondary);
+  }
+
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: right;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .table td:last-child {
+    border-bottom: none;
+    justify-content: center;
+    gap: 0.5rem;
+    padding-top: 1rem !important;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  /* Chống lẹm nội dung text */
+  .table td {
+    word-break: break-word;
+  }
+
+  .modal {
+    width: 95%;
+    margin: 0 auto;
+    max-height: 85vh;
+  }
 }
 </style>

@@ -1,8 +1,8 @@
 <template>
   <div class="settings-page">
     <h1>Cài đặt hệ thống</h1>
-    <div style="display: flex;justify-content: space-around;">
-    <div>
+    <div class="settings-grid">
+    <div class="settings-column">
     <!-- Notification Section -->
     <div class="settings-section">
       <h2>📢 Thông báo trang web</h2>
@@ -68,9 +68,12 @@
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="form-actions" style="display: flex; gap: 10px;">
           <button type="submit" class="btn btn-primary" :disabled="saving">
             {{ saving ? 'Đang lưu...' : '💾 Lưu thông báo' }}
+          </button>
+          <button type="button" class="btn btn-secondary" @click="testPush">
+            🔔 Gửi thông báo thử (Push)
           </button>
         </div>
       </form>
@@ -103,26 +106,38 @@
         </div>
 
         <div class="form-group">
-          <label>Banner URL</label>
-          <input 
-            type="url" 
-            v-model="settings.shop_banner" 
-            class="form-input"
-            placeholder="https://example.com/banner.png"
-          />
-          <small>Link ảnh banner trang chủ (khuyến nghị 1200x400px)</small>
+          <label>Banner URLs (Slider)</label>
+          <div class="banner-list">
+            <div v-for="(banner, index) in bannerList" :key="index" class="banner-item">
+              <input 
+                type="url" 
+                v-model="bannerList[index]" 
+                class="form-input"
+                :placeholder="`Banner ${index + 1}: https://example.com/banner.png`"
+              />
+              <button type="button" class="btn btn-danger btn-sm" @click="removeBanner(index)" v-if="bannerList.length > 1">
+                ✕
+              </button>
+            </div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" @click="addBanner" style="margin-top: 8px;">
+            + Thêm Banner
+          </button>
+          <small>Link ảnh banner trang chủ (khuyến nghị 1200x400px). Nhiều ảnh sẽ chạy slider.</small>
         </div>
 
-        <div v-if="settings.shop_logo || settings.shop_banner" class="preview-section">
+        <div v-if="settings.shop_logo || bannerList.some(b => b)" class="preview-section">
           <h4>Xem trước:</h4>
           <div class="preview-images">
             <div v-if="settings.shop_logo" class="preview-item">
               <span>Logo:</span>
               <img :src="settings.shop_logo" alt="Logo" class="preview-logo" />
             </div>
-            <div v-if="settings.shop_banner" class="preview-item">
-              <span>Banner:</span>
-              <img :src="settings.shop_banner" alt="Banner" class="preview-banner" />
+            <div v-if="bannerList.some(b => b)" class="preview-item banner-preview-list">
+              <span>Banner ({{ bannerList.filter(b => b).length }} ảnh):</span>
+              <div class="banner-preview-grid">
+                <img v-for="(banner, idx) in bannerList.filter(b => b)" :key="idx" :src="banner" alt="Banner" class="preview-banner-thumb" />
+              </div>
             </div>
           </div>
         </div>
@@ -134,110 +149,271 @@
         </div>
       </form>
     </div>
-    </div>
 
-    <div>
+    <!-- Telegram Bot Section -->
     <div class="settings-section">
-      <h2>🏦 Cấu hình SePay / Thanh toán</h2>
+      <h2>🤖 Telegram Bot (Thông báo Admin)</h2>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+        Nhận thông báo đơn hàng và nạp tiền ngay lập tức qua Telegram. Không sợ bị chặn như trình duyệt.
+      </p>
       
       <form @submit.prevent="saveSettings" class="settings-form">
         <div class="form-group">
-          <label>Merchant ID</label>
-          <input 
-            type="text" 
-            v-model="settings.sepay_merchant_id" 
-            class="form-input"
-            placeholder="Nhập Merchant ID từ SePay"
-          />
-        </div>
-
-        <div class="form-group">
-          <label>Secret Key</label>
+          <label>Bot Token (@BotFather)</label>
           <input 
             type="password" 
-            v-model="settings.sepay_secret_key" 
+            v-model="settings.telegram_bot_token" 
             class="form-input"
-            placeholder="Nhập Secret Key từ SePay"
+            placeholder="Ví dụ: 123456789:ABCdefGHI..."
           />
         </div>
 
         <div class="form-group">
-          <label>Tên ngân hàng</label>
-          <select v-model="settings.sepay_bank_name" class="form-input">
-            <option value="">-- Chọn ngân hàng --</option>
-            <option value="MB">MB Bank</option>
-            <option value="VCB">Vietcombank</option>
-            <option value="ACB">ACB</option>
-            <option value="TCB">Techcombank</option>
-            <option value="VPB">VPBank</option>
-            <option value="TPB">TPBank</option>
-            <option value="BIDV">BIDV</option>
-            <option value="VIB">VIB</option>
-            <option value="MSB">MSB</option>
-            <option value="OCB">OCB</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Số tài khoản</label>
+          <label>Chat ID (@userinfobot)</label>
           <input 
             type="text" 
-            v-model="settings.sepay_bank_account" 
+            v-model="settings.telegram_chat_id" 
             class="form-input"
-            placeholder="Nhập số tài khoản ngân hàng"
+            placeholder="Ví dụ: 123456789"
           />
-        </div>
-
-        <div class="form-group">
-          <label>Tên chủ tài khoản</label>
-          <input 
-            type="text" 
-            v-model="settings.sepay_account_name" 
-            class="form-input"
-            placeholder="Nhập tên chủ tài khoản (viết hoa, không dấu)"
-          />
-        </div>
-
-        <div class="webhook-info">
-          <h3>🔗 Webhook URL</h3>
-          <p>Copy URL này và dán vào cài đặt Webhook trên SePay:</p>
-          <code>{{ webhookUrl }}</code>
-          <button type="button" class="btn btn-secondary btn-sm" @click="copyWebhook">
-            📋 Copy
-          </button>
+          <small>Lưu ý: Bạn phải chủ động chat hoặc /start với Bot trước thì nó mới gửi tin nhắn được.</small>
         </div>
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" :disabled="saving">
-            {{ saving ? 'Đang lưu...' : '💾 Lưu cài đặt' }}
+            {{ saving ? 'Đang lưu...' : '💾 Lưu Telegram Bot' }}
           </button>
         </div>
       </form>
+    </div>
 
-      <div v-if="message" :class="['message', messageType]">
-        {{ message }}
+    <!-- Email (Brevo) Section -->
+    <div class="settings-section">
+      <h2>📧 Email (Brevo)</h2>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+        Cấu hình gửi email xác thực tài khoản và quên mật khẩu. Đăng ký miễn phí tại <a href="https://app.brevo.com" target="_blank">app.brevo.com</a>.
+      </p>
+      
+      <form @submit.prevent="saveSettings" class="settings-form">
+        <div class="form-group">
+          <label>Brevo API Key</label>
+          <input 
+            type="password" 
+            v-model="settings.brevo_api_key" 
+            class="form-input"
+            placeholder="xkeysib-..."
+          />
+          <small>Lấy từ Brevo → SMTP & API → Generate API Key</small>
+        </div>
+
+        <div class="form-group">
+          <label>Email người gửi</label>
+          <input 
+            type="email" 
+            v-model="settings.brevo_sender_email" 
+            class="form-input"
+            placeholder="your-email@gmail.com"
+          />
+          <small>Email đã xác minh trên Brevo Senders. Nếu để trống, email sẽ không gửi được.</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" :disabled="saving">
+            {{ saving ? 'Đang lưu...' : '💾 Lưu Email' }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    </div>
+
+    <div class="settings-column">
+        
+    <!-- Contact Settings Section -->
+    <div class="settings-section">
+      <h2>📞 Liên hệ / Chat</h2>
+      
+      <form @submit.prevent="saveSettings" class="settings-form">
+        <div class="form-group">
+          <label>Link Zalo</label>
+          <input 
+            type="url" 
+            v-model="settings.contact_zalo" 
+            class="form-input"
+            placeholder="https://zalo.me/0123456789"
+          />
+          <small>Link Zalo chat của shop</small>
+        </div>
+
+        <div class="form-group">
+          <label>Link Facebook</label>
+          <input 
+            type="url" 
+            v-model="settings.contact_messenger" 
+            class="form-input"
+            placeholder="https://m.me/yourpage"
+          />
+          <small>Link Facebook Messenger của shop</small>
+        </div>
+
+        <div class="form-group">
+          <label>Số Hotline</label>
+          <input 
+            type="tel" 
+            v-model="settings.contact_hotline" 
+            class="form-input"
+            placeholder="0123456789"
+          />
+          <small>Số điện thoại liên hệ</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" :disabled="saving">
+            {{ saving ? 'Đang lưu...' : '💾 Lưu liên hệ' }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+
+    <!-- Payment Accounts Section -->
+    <div class="settings-section">
+      <h2>💳 Danh sách tài khoản ngân hàng</h2>
+      <p class="section-desc">Cấu hình các tài khoản ngân hàng để khách hàng chuyển khoản nạp tiền.</p>
+      
+      <div class="payment-accounts-list">
+        <div v-for="account in paymentAccountsList" :key="account.id" class="account-card">
+          <div class="account-info">
+            <div class="account-bank">{{ account.bankName }}</div>
+            <div class="account-number">{{ account.accountNumber }}</div>
+            <div class="account-name">{{ account.accountName }}</div>
+          </div>
+          <div class="account-actions">
+            <button class="btn btn-sm" @click="editAccount(account)">✏️</button>
+            <button class="btn btn-danger btn-sm" @click="deleteAccount(account.id)">✕</button>
+          </div>
+        </div>
+        
+        <button class="btn btn-secondary btn-block" @click="showAddAccountModal = true">
+          + Thêm tài khoản ngân hàng
+        </button>
       </div>
     </div>
 
-    <div class="settings-section">
-      <h2>ℹ️ Hướng dẫn</h2>
-      <ol>
-        <li>Đăng nhập vào <a href="https://my.sepay.vn" target="_blank">SePay Dashboard</a></li>
-        <li>Vào phần <strong>Cài đặt</strong> → <strong>API</strong></li>
-        <li>Copy <strong>Merchant ID</strong> và <strong>Secret Key</strong></li>
-        <li>Thêm webhook URL ở trên vào cài đặt Webhook của SePay</li>
-        <li>Nhập thông tin tài khoản ngân hàng nhận tiền</li>
-      </ol>
+    <!-- Add/Edit Account Modal -->
+    <Transition name="modal">
+      <div v-if="showAddAccountModal" class="modal-overlay" @click.self="showAddAccountModal = false">
+        <div class="modal-card">
+          <h3>{{ editingAccount ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản mới' }}</h3>
+          <div class="form-group">
+            <label>Ngân hàng</label>
+            <select v-model="accountForm.bankName" class="form-input">
+              <option value="MB">MB Bank</option>
+              <option value="VCB">Vietcombank</option>
+              <option value="ACB">ACB</option>
+              <option value="TCB">Techcombank</option>
+              <option value="VPB">VPBank</option>
+              <option value="TPB">TPBank</option>
+              <option value="BIDV">BIDV</option>
+              <option value="VIB">VIB</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Số tài khoản</label>
+            <input v-model="accountForm.accountNumber" type="text" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>Tên chủ tài khoản</label>
+            <input v-model="accountForm.accountName" type="text" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>Merchant ID (SePay)</label>
+            <input v-model="accountForm.merchantId" type="text" class="form-input" placeholder="SP-LIVE-xxxxxxx" />
+          </div>
+          <div class="form-group">
+            <label>Secret Key (SePay)</label>
+            <input v-model="accountForm.secretKey" type="password" class="form-input" placeholder="Nhập Secret Key" />
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-primary" @click="saveAccount">💾 Lưu</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
     </div>
     </div>
+
+    <div class="settings-section" style="margin-top: 24px;">
+      <h2>Đăng nhập Google</h2>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+        Dán OAuth 2.0 Client ID loại Web application từ Google Cloud Console. Đây không phải Google ID cá nhân.
+      </p>
+      <form @submit.prevent="saveSettings" class="settings-form">
+        <div class="form-group">
+          <label>Google OAuth Client ID</label>
+          <input
+            v-model="settings.google_client_id"
+            type="text"
+            class="form-input"
+            placeholder="1234567890-abcxyz.apps.googleusercontent.com"
+          />
+          <small>Thêm domain frontend vào Authorized JavaScript origins trong Google Cloud Console.</small>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" :disabled="saving">
+            {{ saving ? 'Đang lưu...' : 'Lưu cấu hình Google' }}
+          </button>
+        </div>
+      </form>
     </div>
-  
+
+    <!-- API Settings Section -->
+    <div class="settings-section" style="margin-top: 24px;">
+      <h2>🔑 API cho Công cụ (Tool)</h2>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+        Mã bí mật dùng để xác thực cho các công cụ tự động (như tool thêm acc từ máy tính).
+      </p>
+      
+      <form @submit.prevent="saveSettings" class="settings-form">
+        <div class="form-group">
+          <label>Secret API Token</label>
+          <div style="display: flex; gap: 8px;">
+            <input 
+              v-model="settings.api_auth_token" 
+              :type="showToken ? 'text' : 'password'" 
+              class="form-input" 
+              placeholder="Nhập mã bí mật..."
+            />
+            <button type="button" class="btn btn-secondary btn-sm" @click="showToken = !showToken">
+              {{ showToken ? '👁️' : '🙈' }}
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" @click="generateApiToken">
+              Tạo mã
+            </button>
+          </div>
+          <small>Lưu ý: Sau khi đổi mã, bạn phải cập nhật lại mã mới vào Tool Python.</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" :disabled="saving">
+            {{ saving ? 'Đang lưu...' : '💾 Lưu mã API' }}
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '../../api'
+import { useToast } from '../../composables/useToast'
+import { useSettingsStore } from '../../stores/settings'
+import { usePush } from '../../composables/usePush'
+
+const { toast } = useToast()
+const settingsStore = useSettingsStore()
+const push = usePush()
 
 const settings = ref({
   notification_enabled: false,
@@ -251,54 +427,155 @@ const settings = ref({
   sepay_bank_name: '',
   sepay_bank_account: '',
   sepay_account_name: '',
+  contact_zalo: '',
+  contact_messenger: '',
+  contact_hotline: '',
+  api_auth_token: '',
+  push_enabled: true,
+  vapid_public_key: '',
+  vapid_private_key: '',
+  vapid_subject: '',
+  telegram_bot_token: '',
+  telegram_chat_id: '',
+  brevo_api_key: '',
+  brevo_sender_email: '',
+  google_client_id: '',
+})
+
+const showToken = ref(false)
+const generateApiToken = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    let result = 'ak_'
+    for (let i = 0; i < 32; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    settings.value.api_auth_token = result
+}
+
+const paymentAccountsList = ref([])
+const showAddAccountModal = ref(false)
+const editingAccount = ref(null)
+const accountForm = ref({
+  bankName: 'MB',
+  accountNumber: '',
+  accountName: '',
+  merchantId: '',
+  secretKey: '',
+  isActive: true
 })
 
 const saving = ref(false)
-const message = ref('')
-const messageType = ref('success')
 
-const webhookUrl = 'https://aovshop-backend.onrender.com/api/deposit/webhook'
+const webhookUrl = 'https://(web3).onrender.com/api/deposit/webhook'
+
+const bannerList = ref([''])
 
 const loadSettings = async () => {
   try {
     const response = await api.get('/admin/settings')
     const data = response.data
-    // Convert notification_enabled from string to boolean
-    if (data.notification_enabled !== undefined) {
-      data.notification_enabled = data.notification_enabled === 'true' || data.notification_enabled === true
+    
+    // Create a clean object with only keys that exist in our local settings definition
+    const filteredData = {}
+    Object.keys(settings.value).forEach(key => {
+      if (data[key] !== undefined) {
+        // Handle special type conversions
+        if (key === 'notification_enabled' || key === 'push_enabled') {
+          filteredData[key] = data[key] === 'true' || data[key] === true
+        } else {
+          filteredData[key] = data[key]
+        }
+      }
+    })
+
+    // Parse shop_banner JSON array separately
+    if (data.shop_banner) {
+      try {
+        const parsed = JSON.parse(data.shop_banner)
+        if (Array.isArray(parsed)) {
+          bannerList.value = parsed.length > 0 ? parsed : ['']
+        }
+      } catch {
+        bannerList.value = [data.shop_banner]
+      }
     }
-    settings.value = { ...settings.value, ...data }
+    
+    // Update local settings with filtered data from server
+    settings.value = { ...settings.value, ...filteredData }
+    console.log('Settings loaded:', settings.value)
   } catch (error) {
     console.error('Error loading settings:', error)
+    toast.error('Không thể tải cài đặt từ server')
   }
 }
 
 const saveSettings = async () => {
   saving.value = true
-  message.value = ''
   
   try {
-    // Convert boolean to string for backend
-    const dataToSend = { ...settings.value }
-    if (dataToSend.notification_enabled !== undefined) {
-      dataToSend.notification_enabled = dataToSend.notification_enabled ? 'true' : 'false'
+    // Only send keys that are in our settings ref definition
+    // This filters out junk like 'id', 'updatedAt', etc.
+    const dataToSend = {}
+    Object.keys(settings.value).forEach(key => {
+      let val = settings.value[key]
+      
+      // Convert boolean to string for backend persistence
+      if (key === 'notification_enabled' || key === 'push_enabled') {
+        val = val ? 'true' : 'false'
+      }
+      
+      dataToSend[key] = val
+    })
+
+    // Special handling for banners
+    const validBanners = bannerList.value.filter(b => b && b.trim())
+    dataToSend.shop_banner = validBanners.length > 0 ? JSON.stringify(validBanners) : '[]'
+    
+    const response = await api.post('/admin/settings', dataToSend)
+    
+    // Update the local state with what the server actually saved
+    if (response.data && response.data.saved) {
+        console.log('Saved keys:', response.data.saved)
     }
-    await api.post('/admin/settings', dataToSend)
-    message.value = 'Cài đặt đã được lưu thành công!'
-    messageType.value = 'success'
+
+    // Refresh public settings store
+    await settingsStore.refreshShopInfo()
+    
+    toast.success('Cài đặt đã được lưu thành công!')
   } catch (error) {
-    message.value = 'Lỗi khi lưu cài đặt: ' + (error.response?.data?.message || error.message)
-    messageType.value = 'error'
+    console.error('Save error:', error)
+    toast.error('Lỗi khi lưu cài đặt: ' + (error.response?.data?.message || error.message))
   } finally {
     saving.value = false
   }
 }
 
+const addBanner = () => {
+  bannerList.value.push('')
+}
+
+const removeBanner = (index) => {
+  bannerList.value.splice(index, 1)
+}
+
 const copyWebhook = () => {
   navigator.clipboard.writeText(webhookUrl)
-  message.value = 'Đã copy Webhook URL!'
-  messageType.value = 'success'
-  setTimeout(() => message.value = '', 2000)
+  toast.success('Đã copy Webhook URL!')
+}
+
+const testPush = async () => {
+  try {
+    const success = await push.subscribe(true)
+    if (!success) {
+      toast.error('Vui lòng bật thông báo trình duyệt trước')
+      return
+    }
+
+    await api.post('/admin/test-push')
+    toast.success('Đã gửi thông báo thử!')
+  } catch (error) {
+    toast.error('Lỗi khi gửi thông báo thử')
+  }
 }
 
 // Rich text editor functions
@@ -349,7 +626,54 @@ const insertImage = () => {
   insertAtCursor(`<img src="${url}" style="max-width: 100%; border-radius: 8px;" />`)
 }
 
-onMounted(loadSettings)
+const loadPaymentAccounts = async () => {
+  try {
+    const response = await api.get('/admin/payment-accounts')
+    paymentAccountsList.value = response.data.data
+  } catch (error) {
+    console.error('Error loading payment accounts:', error)
+  }
+}
+
+const editAccount = (account) => {
+  editingAccount.value = account
+  accountForm.value = { ...account }
+  showAddAccountModal.value = true
+}
+
+const saveAccount = async () => {
+  try {
+    if (editingAccount.value) {
+      await api.patch(`/admin/payment-accounts/${editingAccount.value.id}`, accountForm.value)
+      toast.success('Cập nhật tài khoản thành công')
+    } else {
+      await api.post('/admin/payment-accounts', accountForm.value)
+      toast.success('Thêm tài khoản thành công')
+    }
+    showAddAccountModal.value = false
+    editingAccount.value = null
+    accountForm.value = { bankName: 'MB', accountNumber: '', accountName: '', merchantId: '', secretKey: '', isActive: true }
+    loadPaymentAccounts()
+  } catch (error) {
+    toast.error('Lỗi khi lưu tài khoản')
+  }
+}
+
+const deleteAccount = async (id) => {
+  if (!confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return
+  try {
+    await api.delete(`/admin/payment-accounts/${id}`)
+    toast.success('Đã xóa tài khoản')
+    loadPaymentAccounts()
+  } catch (error) {
+    toast.error('Lỗi khi xóa tài khoản')
+  }
+}
+
+onMounted(() => {
+  loadSettings()
+  loadPaymentAccounts()
+})
 </script>
 
 <style scoped>
@@ -357,8 +681,30 @@ onMounted(loadSettings)
   padding: 20px;
 }
 
+.settings-grid {
+  display: flex;
+  justify-content: space-around;
+  gap: 24px;
+}
+
+.settings-column {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .settings-grid {
+    flex-direction: column;
+  }
+  
+  .settings-column {
+    width: 100%;
+  }
+}
+
 .settings-section {
-  background: var(--card-bg);
+  background: var(--bg-secondary, rgba(26, 26, 46, 0.8));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 24px;
@@ -649,5 +995,130 @@ small {
   max-width: 100%;
   border-radius: 8px;
   margin: 8px 0;
+}
+
+/* Banner List Styles */
+.banner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.banner-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.banner-item .form-input {
+  flex: 1;
+}
+
+.banner-preview-list {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.banner-preview-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.preview-banner-thumb {
+  max-height: 60px;
+  max-width: 150px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+/* Payment Accounts Styles */
+.payment-accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.account-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.account-bank {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 1.1rem;
+}
+
+.account-number {
+  font-family: monospace;
+  font-size: 1rem;
+  margin: 4px 0;
+}
+
+.account-name {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.account-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  background: var(--bg-secondary);
+  padding: 24px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid var(--border);
+}
+
+.modal-card h3 {
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.modal-actions button {
+  flex: 1;
+}
+
+.section-desc {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.btn-block {
+  width: 100%;
 }
 </style>
